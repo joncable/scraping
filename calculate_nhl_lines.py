@@ -8,8 +8,8 @@ from bs4 import BeautifulSoup
 
 # the year range (2017-2018)
 #First year that NHL.com released HTML Reports: 2003-2004
-year = str(20172018)
-game_id = str(20001)
+year = str(20182019)
+game_id = str(20246)
 
 # The url we will be scraping
 # V stands for VISITOR and H stands for HOME
@@ -18,6 +18,7 @@ game_id = str(20001)
 # 0265 is the game id and it increments
 def get_html_playbyplay_url(year, game_id):
     url = "http://www.nhl.com/scores/htmlreports/" + year + "/PL0" + game_id + ".HTM"
+    print('playbyplay url: ' + url)
     return url
 
 def get_home_html_timeonice_url(year, game_id):
@@ -88,7 +89,7 @@ def parse_time_on_ice(url):
             shift_hash[player].append(shift)
 
     # pretty print the list of player shifts, minute:seconds turned to seconds
-    pprint.pprint(shift_hash)
+    # pprint.pprint(shift_hash)
 
     toi_together = {}
     player_toi = {}
@@ -137,14 +138,14 @@ def parse_playbyplay(url):
     soup = BeautifulSoup(html, "lxml")
 
     # Possible spaces in between last names like JAMES VAN RIEMSDYK
-    p = re.compile('([A-z ]+) - ([A-z]+) ([A-z ]+)')
+    # Also allow for dashes in their name
+    p = re.compile('([A-z \-]+) - ([A-z\-]+) ([A-z \-]+)')
 
     position_hash = {}
 
     for row in soup.find_all("tr"): 
         for cell in row.find_all("td"):
             for font in cell.find_all("font"):
-                print('#######' + font['title'])
                 matches = p.match(font['title'])
                 if matches:
                     number = str(cell.text).strip()
@@ -213,8 +214,8 @@ pprint.pprint(sorted_away_players)
 
 playbyplay_url = get_html_playbyplay_url(year, game_id)
 position_hash = parse_playbyplay(playbyplay_url)
-print("################################# Position Hash #################################")
-pprint.pprint(position_hash)
+# print("################################# Position Hash #################################")
+# pprint.pprint(position_hash)
 
 print("################################# Home Player TOI #################################")
 pprint.pprint(home_player_toi)
