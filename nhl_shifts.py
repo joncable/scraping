@@ -3,6 +3,7 @@ import re
 import pprint
 import operator
 import json
+from operator import itemgetter
 
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
@@ -88,8 +89,6 @@ def get_team_players(team_id):
         else:
             player_number = 0
 
-        print("id=" + str(player_id) + "name=" + player_name)
-
         team_players[player_id] = {'name': player_name,
                                    'number': player_number,
                                    'position': position}
@@ -167,10 +166,6 @@ def parse_time_on_ice(url, players):
     # create the BeautifulSoup object
     soup = BeautifulSoup(html, "lxml")
 
-    # regexes for grabbing players/columns
-    player_regex = '^([0-9]+) ([A-z]+), ([A-z]+)$'
-    column_regex = '[A-z]+'
-
     # classes for different cell types
     player_class = 'playerHeading+border'
     header_class = 'heading+lborder+bborder'
@@ -180,6 +175,7 @@ def parse_time_on_ice(url, players):
     column_builder = []
     column_headers = []
     shift_hash = {}
+    team_shifts = []
 
     # Match "37 Cable, Jonathan", need to include slashes, periods and spaces in names as well
     p = re.compile('^([0-9]+) ([A-z\-\. ]+), ([A-z\-\. ]+)$')
@@ -215,6 +211,10 @@ def parse_time_on_ice(url, players):
                 first_name = matches.group(3)
                 player_id = find_player_id(number, first_name, last_name, players)
 
+                # we can't locate this player right now
+                if player_id == 0:
+                    continue
+
                 # get shift start/end minute:second, and split them
                 start_min, start_sec = player_hash['Start of ShiftElapsed / Game'][:5].split(':')
                 end_min, end_sec = player_hash['End of ShiftElapsed / Game'][:5].split(':')
@@ -223,21 +223,142 @@ def parse_time_on_ice(url, players):
                 period = player_hash['Per']
 
                 shift = {}
+                # if period is overtime, convert to '4'
+                if (period == 'OT'):
+                    period = 4;
+
                 # convert each shift into a seconds timestamp
                 shift['start'] = (int(start_min) * 60) + int(start_sec) + ((int(period) - 1) * 20 * 60)
                 shift['end'] = (int(end_min) * 60) + int(end_sec) + ((int(period) - 1) * 20 * 60)
-                shift_hash[player_id].append(shift)
-            else:
-                print("NO MATCH FOR player={}".format(player))
+                shift['player_id'] = player_id
+                # shift_hash[player_id].append(shift)
 
-    # pretty print the list of player shifts, minute:seconds turned to seconds
-    # pprint.pprint(shift_hash)
+                # Add shift to list of team shifts
+                team_shifts.append(shift)
+
+            else:
+                print("Error: No match for player={}".format(player))
+
+    # sort by start of shift time
+    team_shifts = sorted(team_shifts, key=itemgetter('start'), reverse=True)
+
+    return team_shifts
+
+def calculate_toi_deployments(shifts):
+
+    # set current time on ice to zero
+    current_toi = 0
+    current_shifts = []
+    icetime = {}
+
+    while(len(shifts) > 0):
+        shift = shifts.pop()
+
+        # keep current shifts sorted by their expiration time
+        current_shifts = sorted(current_shifts, key=itemgetter('end'))
+
+        # check to see if we have ending shifts
+        if len(current_shifts) > 0 and current_shifts[0]['end'] <= shift['start']:
+
+            # calculate shift length
+            shift_length = current_shifts[0]['end'] - current_toi
+            current_toi = current_shifts[0]['end']
+
+            line = set()
+            # use a copy of current_shifts ([:]) so that we can modify it mid-loop
+            for current_shift in current_shifts[:]:
+                # set up the current line
+                line.add(current_shift['player_id'])
+
+                # remove all ending shifts
+                if (current_shift['end'] <= shift['start']):
+                    current_shifts.remove(current_shift)
+
+            frozen_line = frozenset(line)
+
+            if frozen_line in icetime:
+                icetime[frozen_line] += shift_length
+            else:
+                icetime[frozen_line] = shift_length
+
+        current_shifts.append(shift)
+
+    return icetime
+
+def calculate_lines(toi_deployments, players):
+
+    forward_lines = {}
+    defense_lines = {}
+
+    for deployment, toi in toi_deployments.items():
+
+        forwards = set()
+        defense = set()
+        for player_id in deployment:
+            name = players[player_id]['name']
+            position = players[player_id]['position']
+            if position == 'G':
+                # goalie, we don't care
+                continue
+            elif position == 'D':
+                # defense, find partner
+                defense.add(player_id)
+            else:
+                # forward, find linemates
+                forwards.add(player_id)
+
+        if len(defense) == 2:
+            frozen_defense = frozenset(defense)
+            if frozen_defense in defense_lines:
+                defense_lines[frozen_defense] += toi
+            else:
+                defense_lines[frozen_defense] = toi
+
+        if len(forwards) == 3:
+            frozen_forwards = frozenset(forwards)
+            if frozen_forwards in forward_lines:
+                forward_lines[frozen_forwards] += toi
+            else:
+                forward_lines[frozen_forwards] = toi
+
+    sorted_forward_lines = sorted(forward_lines.items(), key=lambda kv: kv[1], reverse=True)
+
+    for forward_line, toi in sorted_forward_lines[:4]:
+        forward_string = ''
+        for player_id in forward_line:
+            forward_string += "{} ({}), ".format(players[player_id]['name'], players[player_id]['position'])
+        print(forward_string + str(toi))
+
+    sorted_defense_lines = sorted(defense_lines.items(), key=lambda kv: kv[1], reverse=True)
+
+    for defense_line, toi in sorted_defense_lines[:3]:
+        defense_string = ''
+        for player_id in defense_line:
+            defense_string += "{} ({}), ".format(players[player_id]['name'], players[player_id]['position'])
+        print(defense_string + str(toi))
+
+
+
+
+
+
+
+
+
+
 
 # get the games for today
 todays_games = get_todays_games()
 
+games = 1
+
 # for each game, get the players and their shifts
 for game_id, teams in todays_games.items():
+
+    # limit to one game for testing
+    if games > 10:
+        break
+
     print(game_id)
     playbyplay_url = get_html_playbyplay_url(game_id)
     home_id = teams['home']
@@ -247,7 +368,19 @@ for game_id, teams in todays_games.items():
     away_players = get_team_players(away_id)
 
     home_toi_url = get_home_html_timeonice_url(game_id)
-    parse_time_on_ice(home_toi_url, home_players)
+    home_shifts = parse_time_on_ice(home_toi_url, home_players)
+    home_toi_deploy = calculate_toi_deployments(home_shifts)
+    home_lines = calculate_lines(home_toi_deploy, home_players)
+
+
+
+
+
+
+    games += 1
+
+
+
 
 
 
