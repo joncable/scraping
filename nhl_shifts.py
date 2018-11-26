@@ -8,6 +8,11 @@ from operator import itemgetter
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 
+# postgres imports
+import os
+from urllib import parse
+import psycopg2
+
 def get_game_from_gameid(game_id):
     # get the specific game number
     game_number = str(game_id)[4:]
@@ -159,6 +164,7 @@ def find_player_id(number, first_name, last_name, players):
     print("Error: Could not find player_id for {}, {}".format(last_name, first_name))
     return 0
 
+
 def parse_time_on_ice(url, players):
     # get the html
     html = urlopen(url)
@@ -244,6 +250,7 @@ def parse_time_on_ice(url, players):
 
     return team_shifts
 
+
 def calculate_toi_deployments(shifts):
 
     # set current time on ice to zero
@@ -285,6 +292,7 @@ def calculate_toi_deployments(shifts):
 
     return icetime
 
+
 def calculate_lines(toi_deployments, players):
 
     forward_lines = {}
@@ -323,29 +331,73 @@ def calculate_lines(toi_deployments, players):
 
     sorted_forward_lines = sorted(forward_lines.items(), key=lambda kv: kv[1], reverse=True)
 
+    lines_info = []
+    depth = 1
     for forward_line, toi in sorted_forward_lines[:4]:
-        forward_string = ''
         for player_id in forward_line:
-            forward_string += "{} ({}), ".format(players[player_id]['name'], players[player_id]['position'])
-        print(forward_string + str(toi))
+            info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': players[player_id]['position'], 'state':'EVEN'}
+            lines_info.append(info)
+        depth += 1
 
     sorted_defense_lines = sorted(defense_lines.items(), key=lambda kv: kv[1], reverse=True)
 
+    pprint.pprint(sorted_defense_lines)
+
+    depth = 1
     for defense_line, toi in sorted_defense_lines[:3]:
-        defense_string = ''
         for player_id in defense_line:
-            defense_string += "{} ({}), ".format(players[player_id]['name'], players[player_id]['position'])
-        print(defense_string + str(toi))
+            info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': players[player_id]['position'], 'state':'EVEN'}
+            lines_info.append(info)
+        depth += 1
+
+    return lines_info
 
 
+def write_lines_to_database(game_id, team_id, line_info):
+    # set up postgres connection
+    parse.uses_netloc.append("postgres")
+    url = parse.urlparse(os.environ["DATABASE_URL"])
 
+    conn = psycopg2.connect(
+        database=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
 
+    cur = conn.cursor()
 
+    # CREATE TABLE lines (
+    #     game_id integer,
+    #     player_id integer,
+    #     team_id integer NOT NULL,
+    #     position character varying(5) NOT NULL,
+    #     depth integer,
+    #     state character varying(5),
+    #     time_on_ice integer NOT NULL,
+    #     CONSTRAINT lines_pkey PRIMARY KEY (game_id, player_id, depth, state)
+    # );
 
+    sql = """INSERT INTO lines(game_id, player_id, team_id, position, depth, state, time_on_ice)
+             VALUES(%s, %s, %s, %s, %s, %s, %s);"""
 
+    for line in line_info:
+        depth = line['depth']
+        toi = line['toi']
+        position = line['position']
+        player_id = line['player_id']
+        state = line['state']
 
+        print("INSERTING game_id={} team_id={} player_id={} depth={} toi={} position={} state={}".format(game_id, team_id, player_id, depth, toi, position, state))
 
+        # execute the INSERT statement
+        cur.execute(sql, (game_id, player_id, team_id, position, depth, state, toi))
 
+        # close communication with the PostgreSQL database server
+        cur.close()
+        # commit the changes
+        conn.commit()
 
 # get the games for today
 todays_games = get_todays_games()
@@ -356,7 +408,7 @@ games = 1
 for game_id, teams in todays_games.items():
 
     # limit to one game for testing
-    if games > 10:
+    if games > 1:
         break
 
     print(game_id)
@@ -370,19 +422,7 @@ for game_id, teams in todays_games.items():
     home_toi_url = get_home_html_timeonice_url(game_id)
     home_shifts = parse_time_on_ice(home_toi_url, home_players)
     home_toi_deploy = calculate_toi_deployments(home_shifts)
-    home_lines = calculate_lines(home_toi_deploy, home_players)
-
-
-
-
-
+    home_line_info = calculate_lines(home_toi_deploy, home_players)
+    write_lines_to_database(game_id, home_id, home_line_info)
 
     games += 1
-
-
-
-
-
-
-
-
