@@ -137,7 +137,7 @@ def parse_playbyplay(url):
 
     # Possible spaces in between last names like JAMES VAN RIEMSDYK
     # Also allow for dashes in their name
-    p = re.compile('([A-z \-]+) - ([A-z\-]+) ([A-z \-]+)')
+    p = re.compile("([A-z \-']+) - ([A-z\-']+) (['A-z \-']+)")
 
     position_hash = {}
 
@@ -184,7 +184,7 @@ def parse_time_on_ice(url, players):
     team_shifts = []
 
     # Match "37 Cable, Jonathan", need to include slashes, periods and spaces in names as well
-    p = re.compile('^([0-9]+) ([A-z\-\. ]+), ([A-z\-\. ]+)$')
+    p = re.compile("^([0-9]+) ([A-z\-\. ']+), ([A-z\-\. ']+)$")
 
     for row in soup.find_all("tr"):
         cells = row.find_all("td")
@@ -303,7 +303,7 @@ def calculate_lines(toi_deployments, players):
         forwards = set()
         defense = set()
         for player_id in deployment:
-            name = players[player_id]['name']
+            # name = players[player_id]['name']
             position = players[player_id]['position']
             if position == 'G':
                 # goalie, we don't care
@@ -331,13 +331,17 @@ def calculate_lines(toi_deployments, players):
 
     sorted_forward_lines = sorted(forward_lines.items(), key=lambda kv: kv[1], reverse=True)
 
+    pprint.pprint(sorted_forward_lines)
+
     lines_info = []
     depth = 1
     for forward_line, toi in sorted_forward_lines[:4]:
         for player_id in forward_line:
             info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': players[player_id]['position'], 'state':'EVEN'}
             lines_info.append(info)
+            print("{},".format(players[player_id]['name']), end =" ")
         depth += 1
+        print("")
 
     sorted_defense_lines = sorted(defense_lines.items(), key=lambda kv: kv[1], reverse=True)
 
@@ -348,7 +352,9 @@ def calculate_lines(toi_deployments, players):
         for player_id in defense_line:
             info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': players[player_id]['position'], 'state':'EVEN'}
             lines_info.append(info)
+            print("{},".format(players[player_id]['name']), end =" ")
         depth += 1
+        print("")
 
     return lines_info
 
@@ -408,7 +414,7 @@ games = 1
 for game_id, teams in todays_games.items():
 
     # limit to one game for testing
-    if games > 1:
+    if games > 10:
         break
 
     print(game_id)
@@ -423,6 +429,14 @@ for game_id, teams in todays_games.items():
     home_shifts = parse_time_on_ice(home_toi_url, home_players)
     home_toi_deploy = calculate_toi_deployments(home_shifts)
     home_line_info = calculate_lines(home_toi_deploy, home_players)
-    write_lines_to_database(game_id, home_id, home_line_info)
+
+    away_toi_url = get_away_html_timeonice_url(game_id)
+    away_shifts = parse_time_on_ice(away_toi_url, away_players)
+    away_toi_deploy = calculate_toi_deployments(away_shifts)
+    away_line_info = calculate_lines(away_toi_deploy, away_players)
+
+    # pprint.pprint(home_line_info)
+
+    # write_lines_to_database(game_id, home_id, home_line_info)
 
     games += 1
