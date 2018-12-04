@@ -400,10 +400,10 @@ def write_lines_to_database(game_id, team_id, line_info):
         # execute the INSERT statement
         cur.execute(sql, (game_id, player_id, team_id, position, depth, state, toi))
 
-        # close communication with the PostgreSQL database server
-        cur.close()
-        # commit the changes
-        conn.commit()
+    # close communication with the PostgreSQL database server
+    cur.close()
+    # commit the changes
+    conn.commit()
 
 # get the games for today
 todays_games = get_todays_games()
@@ -430,13 +430,15 @@ for game_id, teams in todays_games.items():
     home_toi_deploy = calculate_toi_deployments(home_shifts)
     home_line_info = calculate_lines(home_toi_deploy, home_players)
 
+    # write the home lines to the LINES table in Postgresql
+    write_lines_to_database(game_id, home_id, home_line_info)
+
     away_toi_url = get_away_html_timeonice_url(game_id)
     away_shifts = parse_time_on_ice(away_toi_url, away_players)
     away_toi_deploy = calculate_toi_deployments(away_shifts)
     away_line_info = calculate_lines(away_toi_deploy, away_players)
 
-    # pprint.pprint(home_line_info)
-
-    # write_lines_to_database(game_id, home_id, home_line_info)
+    # write the away lines to the LINES table in Postgresql
+    write_lines_to_database(game_id, home_id, away_line_info)
 
     games += 1
