@@ -386,7 +386,7 @@ def write_lines_to_database(game_id, team_id, line_info):
     # );
 
 
-    delete_sql = """DELETE FROM lines WHERE game_id=%s team_id=%s"""
+    delete_sql = """DELETE FROM lines WHERE game_id=%s AND team_id=%s"""
 
     # execute the DELETE statement
     cur.execute(delete_sql, (game_id, team_id))
