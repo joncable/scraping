@@ -385,6 +385,17 @@ def write_lines_to_database(game_id, team_id, line_info):
     #     CONSTRAINT lines_pkey PRIMARY KEY (game_id, player_id, depth, state)
     # );
 
+
+    delete_sql = """DELETE FROM lines WHERE game_id=%s team_id=%s"""
+
+    # execute the DELETE statement
+    cur.execute(delete_sql, (game_id, team_id))
+
+    # get the number of deleted rows
+    rows_deleted = cur.rowcount
+
+    print("DELETED {} rows from the lines table for game_id={} team_id={}".format(rows_deleted, game_id, team_id))
+
     sql = """INSERT INTO lines(game_id, player_id, team_id, position, depth, state, time_on_ice)
              VALUES(%s, %s, %s, %s, %s, %s, %s);"""
 
