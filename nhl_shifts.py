@@ -385,8 +385,8 @@ def write_lines_to_database(game_id, team_id, line_info):
     #     CONSTRAINT lines_pkey PRIMARY KEY (game_id, player_id, depth, state)
     # );
 
-
-    delete_sql = """DELETE FROM lines WHERE game_id=%s AND team_id=%s"""
+    # Add game_id=%s when we expand to display multiple lines for different games
+    delete_sql = """DELETE FROM lines WHERE team_id=%s"""
 
     # execute the DELETE statement
     cur.execute(delete_sql, (game_id, team_id))
