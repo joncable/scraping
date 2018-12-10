@@ -53,7 +53,7 @@ def write_team_to_database(team_id, name, location, venue, team_name, division, 
 
     cur = conn.cursor()
 
-    sql = """REPLACE INTO teams(team_id, name, location, venue, team_name, division, conference)
+    sql = """INSERT INTO teams(team_id, name, location, venue, team_name, division, conference)
              VALUES(%s, %s, %s, %s, %s, %s, %s);"""
 
     print("INSERTING team_id={} name={} location={} venue={} team_name={} division={} conference={}".format(
