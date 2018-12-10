@@ -143,7 +143,7 @@ for team in teams:
     division = team['division']['id']
     conference = team['conference']['id']
 
-    write_team_to_database(team_id, name, location, venue, team_name, division, conference)
+    # write_team_to_database(team_id, name, location, venue, team_name, division, conference)
 
     players = get_team_players(team_id)
 
