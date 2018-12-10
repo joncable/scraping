@@ -389,7 +389,7 @@ def write_lines_to_database(game_id, team_id, line_info):
     delete_sql = """DELETE FROM lines WHERE team_id=%s"""
 
     # execute the DELETE statement
-    cur.execute(delete_sql, (team_id))
+    cur.execute(delete_sql, [team_id])
 
     # get the number of deleted rows
     rows_deleted = cur.rowcount
