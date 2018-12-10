@@ -34,7 +34,42 @@ def get_nhl_teams():
     return teams_data
 
 def write_player_to_database(player_id, team_id, player_name, position, player_number):
-    print("INSERT PLAYER player_id={} team_id={} player_name={} position={} player_number={}".format(player_id, team_id, player_name, position, player_number))
+
+    # set up postgres connection
+    parse.uses_netloc.append("postgres")
+    url = parse.urlparse(os.environ["DATABASE_URL"])
+
+    conn = psycopg2.connect(
+        database=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+
+    cur = conn.cursor()
+
+    sql = """INSERT INTO players(player_id, team_id, player_name, position, player_number)
+             VALUES(%s, %s, %s, %s, %s);"""
+
+    # INSERT INTO the_table(id, column_1, column_2)
+    # VALUES(1, 'A', 'X'), (2, 'B', 'Y'), (3, 'C', 'Z')
+    # ON CONFLICT(id) DO UPDATE SET
+    # column_1 = excluded.column_1,
+    # column_2 = excluded.column_2;
+
+    print("INSERTING player_id={} team_id={} player_name={} position={} player_number={}".format(
+                     player_id, team_id, player_name, position, player_number))
+
+    # execute the INSERT statement
+    cur.execute(sql, (player_id, team_id, player_name, position, player_number))
+
+    # close communication with the PostgreSQL database server
+    cur.close()
+
+    # commit the changes
+    conn.commit()
+
     return
 
 def write_team_to_database(team_id, name, location, venue, team_name, division, conference):
@@ -55,6 +90,12 @@ def write_team_to_database(team_id, name, location, venue, team_name, division, 
 
     sql = """INSERT INTO teams(team_id, name, location, venue, team_name, division, conference)
              VALUES(%s, %s, %s, %s, %s, %s, %s);"""
+
+    # INSERT INTO the_table(id, column_1, column_2)
+    # VALUES(1, 'A', 'X'), (2, 'B', 'Y'), (3, 'C', 'Z')
+    # ON CONFLICT(id) DO UPDATE SET
+    # column_1 = excluded.column_1,
+    # column_2 = excluded.column_2;
 
     print("INSERTING team_id={} name={} location={} venue={} team_name={} division={} conference={}".format(
                      team_id, name, location, venue, team_name, division, conference))
