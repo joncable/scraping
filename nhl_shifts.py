@@ -450,6 +450,7 @@ for game_id, teams in todays_games.items():
     away_line_info = calculate_lines(away_toi_deploy, away_players)
 
     # write the away lines to the LINES table in Postgresql
-    write_lines_to_database(game_id, home_id, away_line_info)
+    write_lines_to_database(game_id, away_id, away_line_info)
 
     games += 1
+    
