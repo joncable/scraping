@@ -49,7 +49,7 @@ def write_player_to_database(player_id, team_id, player_name, position, player_n
 
     cur = conn.cursor()
 
-    sql = """INSERT INTO players(player_id, team_id, player_name, position, player_number)
+    sql = """INSERT INTO players(player_id, team_id, name, position, number)
              VALUES(%s, %s, %s, %s, %s);"""
 
     # INSERT INTO the_table(id, column_1, column_2)
@@ -58,7 +58,7 @@ def write_player_to_database(player_id, team_id, player_name, position, player_n
     # column_1 = excluded.column_1,
     # column_2 = excluded.column_2;
 
-    print("INSERTING player_id={} team_id={} player_name={} position={} player_number={}".format(
+    print("INSERTING player_id={} team_id={} name={} position={} number={}".format(
                      player_id, team_id, player_name, position, player_number))
 
     # execute the INSERT statement
