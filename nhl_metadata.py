@@ -1,0 +1,109 @@
+import requests
+import re
+import pprint
+import operator
+import json
+from operator import itemgetter
+
+from urllib.request import urlopen
+
+# postgres imports
+import os
+from urllib import parse
+import psycopg2
+
+
+def get_nhl_teams_url():
+    url = "https://statsapi.web.nhl.com/api/v1/teams"
+    return url
+
+
+def get_nhl_team_players_url(team_id):
+    url = "https://statsapi.web.nhl.com/api/v1/teams/{}?expand=team.roster".format(team_id)
+    return url
+
+
+def get_nhl_teams():
+    teams_url = get_nhl_teams_url()
+
+    # get the html
+    html = urlopen(teams_url)
+    data = json.load(html)
+
+    teams_data = data['teams']
+    return teams_data
+
+def write_player_to_database(player_id, team_id, player_name, position, player_number):
+    print("INSERT PLAYER player_id={} team_id={} player_name={} position={} player_number={}".format(player_id, team_id, player_name, position, player_number))
+    return
+
+def write_team_to_database(team_id, name, location, venue, team_name, division, conference):
+
+    # set up postgres connection
+    parse.uses_netloc.append("postgres")
+    url = parse.urlparse(os.environ["DATABASE_URL"])
+
+    conn = psycopg2.connect(
+        database=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+
+    cur = conn.cursor()
+
+    sql = """REPLACE INTO teams(team_id, name, location, venue, team_name, division, conference)
+             VALUES(%s, %s, %s, %s, %s, %s, %s);"""
+
+    print("INSERTING team_id={} name={} location={} venue={} team_name={} division={} conference={}".format(
+                     team_id, name, location, venue, team_name, division, conference))
+
+    # execute the INSERT statement
+    cur.execute(sql, (team_id, name, location, venue, team_name, division, conference))
+
+    # close communication with the PostgreSQL database server
+    cur.close()
+
+    # commit the changes
+    conn.commit()
+
+    return
+
+def get_team_players(team_id):
+    players_url = get_nhl_team_players_url(team_id)
+
+    # get the html
+    html = urlopen(players_url)
+    data = json.load(html)
+
+    roster = data['teams'][0]['roster']['roster']
+
+    for player in roster:
+        player_id = player['person']['id']
+        player_name = player['person']['fullName']
+        position = player['position']['code']
+
+        # jersey numbers aren't always set, default to zero
+        if 'jerseyNumber' in player:
+            player_number = player['jerseyNumber']
+        else:
+            player_number = 0
+
+        write_player_to_database(player_id, team_id, player_name, position, player_number)
+
+teams = get_nhl_teams()
+for team in teams:
+    team_id = team['id']
+    name = team['name']
+    venue = team['venue']['name']
+    location = team['locationName']
+    team_name = team['teamName']
+    division = team['division']['id']
+    conference = team['conference']['id']
+
+    write_team_to_database(team_id, name, location, venue, team_name, division, conference)
+
+    players = get_team_players(team_id)
+
+
