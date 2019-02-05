@@ -49,6 +49,12 @@ def write_player_to_database(player_id, team_id, player_name, position, player_n
 
     cur = conn.cursor()
 
+    # Delete this player_id
+    delete_sql = """DELETE FROM players WHERE player_id=%s"""
+
+    # execute the DELETE statement
+    cur.execute(delete_sql, [player_id])
+
     sql = """INSERT INTO players(player_id, team_id, name, position, number)
              VALUES(%s, %s, %s, %s, %s);"""
 
@@ -87,6 +93,12 @@ def write_team_to_database(team_id, name, location, venue, team_name, division, 
     )
 
     cur = conn.cursor()
+
+    # Delete this player_id
+    delete_sql = """DELETE FROM teams WHERE team_id=%s"""
+
+    # execute the DELETE statement
+    cur.execute(delete_sql, [team_id])
 
     sql = """INSERT INTO teams(team_id, name, location, venue, team_name, division, conference)
              VALUES(%s, %s, %s, %s, %s, %s, %s);"""
