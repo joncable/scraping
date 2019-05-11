@@ -5,6 +5,9 @@ import operator
 import json
 from operator import itemgetter
 
+# include standard modules for parsing command line
+import getopt, sys
+
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 
@@ -63,8 +66,14 @@ def get_away_html_timeonice_url(game_id):
     print('away url: ' + url)
     return url
 
-def get_todays_schedule_url():
-    url = "https://statsapi.web.nhl.com/api/v1/schedule"
+def get_schedule_url(date):
+    if date:
+        return "https://statsapi.web.nhl.com/api/v1/schedule?date=" + date
+    else:
+        return "https://statsapi.web.nhl.com/api/v1/schedule"
+
+def get_live_game_feed_url(game_id):
+    url = "https://statsapi.web.nhl.com/api/v1/game/" + str(game_id) + "/feed/live?site=en_nhl"
     return url
 
 def get_team_players_url(team_id):
@@ -100,9 +109,34 @@ def get_team_players(team_id):
 
     return team_players
 
+def get_player_stats_for_game(game_id):
+    live_game_feed_url = get_live_game_feed_url(game_id)
 
-def get_todays_games():
-    url = get_todays_schedule_url()
+    # get the html
+    html = urlopen(live_game_feed_url)
+    data = json.load(html)
+
+    teams = data['liveData']['boxscore']['teams']
+
+    player_stats = {}
+
+    for team in teams:
+        players = teams[team]['players']
+        for player_num in players:
+            player = players[player_num]
+            player_id = player['person']['id']
+            position = player['position']['code']
+            player_name = player['person']['fullName']
+            stats = player['stats']
+
+            if 'skaterStats' in stats:
+                player_stats[player_id] = stats['skaterStats']
+
+    return player_stats
+
+
+def get_games_on_date(date):
+    url = get_schedule_url(date)
 
     # get the html
     html = urlopen(url)
@@ -292,8 +326,41 @@ def calculate_toi_deployments(shifts):
 
     return icetime
 
+def determine_forward_positions(line, roster, player_stats):
 
-def calculate_lines(toi_deployments, players):
+    forward_positions = {}
+
+    faceoffs_taken = {}
+    for player_id in line:
+        faceoffs_taken[player_id] = player_stats[player_id]['faceoffTaken']
+
+    # get player_id with maximum number of faceoffs taken to determine center
+    c_player_id = max(faceoffs_taken.items(), key=operator.itemgetter(1))[0]
+    forward_positions[c_player_id] = 'C'
+
+    available_positions = {"L", "R"}
+
+    for player_id in line:
+        # skip already set positions
+        if player_id in forward_positions:
+            continue
+
+        player_position = roster[player_id]['position']
+        if player_position in available_positions:
+            forward_positions[player_id] = player_position
+            available_positions.remove(player_position)
+
+    for player_id in line:
+        # skip already set positions
+        if player_id in forward_positions:
+            continue
+
+        # assign remaining players a position
+        forward_positions[player_id] = available_positions.pop()
+
+    return forward_positions
+
+def calculate_lines(toi_deployments, players, player_stats):
 
     forward_lines = {}
     defense_lines = {}
@@ -336,10 +403,11 @@ def calculate_lines(toi_deployments, players):
     lines_info = []
     depth = 1
     for forward_line, toi in sorted_forward_lines[:4]:
+        line_positions = determine_forward_positions(forward_line, players, player_stats)
         for player_id in forward_line:
-            info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': players[player_id]['position'], 'state':'EVEN'}
+            info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': line_positions[player_id], 'state': 'EVEN'}
             lines_info.append(info)
-            print("{},".format(players[player_id]['name']), end =" ")
+            print("{} ({}),".format(players[player_id]['name'], info['position']), end =" ")
         depth += 1
         print("")
 
@@ -416,8 +484,43 @@ def write_lines_to_database(game_id, team_id, line_info):
     # commit the changes
     conn.commit()
 
+
+
+
+# read commandline arguments, first
+fullCmdArguments = sys.argv
+
+# - further arguments
+argumentList = fullCmdArguments[1:]
+
+unixOptions = "d:hvw"
+gnuOptions = ["date=", "help", "verbose", "write"]
+
+try:
+    arguments, values = getopt.getopt(argumentList, unixOptions, gnuOptions)
+except getopt.error as err:
+    # output error, and return with an error code
+    print(str(err))
+    sys.exit(2)
+
+# evaluate given options
+date = ''
+write_to_database = False
+for currentArgument, currentValue in arguments:
+    if currentArgument in ("-v", "--verbose"):
+        print("enabling verbose mode")
+    elif currentArgument in ("-h", "--help"):
+        print("displaying help")
+    elif currentArgument in ("-w", "--write"):
+        print("enabling write (to database) mode")
+        write_to_database = True
+    elif currentArgument in ("-d", "--date"):
+        print(("using specified date: (%s)") % (currentValue))
+        date = currentValue
+
+
 # get the games for today
-todays_games = get_todays_games()
+todays_games = get_games_on_date(date)
 
 games = 1
 
@@ -425,8 +528,8 @@ games = 1
 for game_id, teams in todays_games.items():
 
     # limit to one game for testing
-    if games > 10:
-        break
+    # if games > 1:
+    #    break
 
     print(game_id)
     playbyplay_url = get_html_playbyplay_url(game_id)
@@ -436,21 +539,24 @@ for game_id, teams in todays_games.items():
     home_players = get_team_players(home_id)
     away_players = get_team_players(away_id)
 
+    player_stats = get_player_stats_for_game(game_id)
+
     home_toi_url = get_home_html_timeonice_url(game_id)
     home_shifts = parse_time_on_ice(home_toi_url, home_players)
     home_toi_deploy = calculate_toi_deployments(home_shifts)
-    home_line_info = calculate_lines(home_toi_deploy, home_players)
+    home_line_info = calculate_lines(home_toi_deploy, home_players, player_stats)
 
     # write the home lines to the LINES table in Postgresql
-    write_lines_to_database(game_id, home_id, home_line_info)
+    if write_to_database:
+        write_lines_to_database(game_id, home_id, home_line_info)
 
     away_toi_url = get_away_html_timeonice_url(game_id)
     away_shifts = parse_time_on_ice(away_toi_url, away_players)
     away_toi_deploy = calculate_toi_deployments(away_shifts)
-    away_line_info = calculate_lines(away_toi_deploy, away_players)
+    away_line_info = calculate_lines(away_toi_deploy, away_players, player_stats)
 
     # write the away lines to the LINES table in Postgresql
-    write_lines_to_database(game_id, away_id, away_line_info)
+    if write_to_database:
+        write_lines_to_database(game_id, away_id, away_line_info)
 
     games += 1
-    
