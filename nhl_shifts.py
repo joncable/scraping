@@ -365,6 +365,9 @@ def calculate_lines(toi_deployments, players, player_stats):
     forward_lines = {}
     defense_lines = {}
 
+    all_forwards = set()
+    all_defense = set()
+
     for deployment, toi in toi_deployments.items():
 
         forwards = set()
@@ -378,9 +381,11 @@ def calculate_lines(toi_deployments, players, player_stats):
             elif position == 'D':
                 # defense, find partner
                 defense.add(player_id)
+                all_defense.add(player_id)
             else:
                 # forward, find linemates
                 forwards.add(player_id)
+                all_forwards.add(player_id)
 
         if len(defense) == 2:
             frozen_defense = frozenset(defense)
@@ -420,6 +425,19 @@ def calculate_lines(toi_deployments, players, player_stats):
         depth += 1
         print("")
 
+    # if we didn't have four separate lines
+    while depth < 5:
+        remaining_forwards = all_forwards.difference(assigned_forwards)
+        line_positions = determine_forward_positions(remaining_forwards, players, player_stats)
+        for player_id in remaining_forwards:
+            if player_id in line_positions:
+                info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': line_positions[player_id], 'state': 'EVEN'}
+                lines_info.append(info)
+                assigned_forwards.add(player_id)
+                print("{} ({}),".format(players[player_id]['name'], info['position']), end =" ")
+        depth += 1
+        print("")
+
     sorted_defense_lines = sorted(defense_lines.items(), key=lambda kv: kv[1], reverse=True)
 
     pprint.pprint(sorted_defense_lines)
@@ -442,8 +460,18 @@ def calculate_lines(toi_deployments, players, player_stats):
         depth += 1
         print("")
 
-    return lines_info
+    # if we didn't have three separate lines
+    while depth < 5:
+        remaining_defense = all_defense.difference(assigned_defense)
+        for player_id in remaining_defense:
+            info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': players[player_id]['position'], 'state':'EVEN'}
+            lines_info.append(info)
+            assigned_defense.add(player_id)
+            print("{},".format(players[player_id]['name']), end =" ")
+        depth += 1
+        print("")
 
+    return lines_info
 
 def write_lines_to_database(game_id, team_id, line_info):
     # set up postgres connection
