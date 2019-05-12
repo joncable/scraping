@@ -402,11 +402,20 @@ def calculate_lines(toi_deployments, players, player_stats):
 
     lines_info = []
     depth = 1
-    for forward_line, toi in sorted_forward_lines[:4]:
+    assigned_forwards = set()
+    for forward_line, toi in sorted_forward_lines:
+        if depth == 5:
+            break
+
+        # ensure that there is no intersection between these sets so we don't re-use players
+        if len(assigned_forwards.intersection(forward_line)) is not 0:
+            continue
+
         line_positions = determine_forward_positions(forward_line, players, player_stats)
         for player_id in forward_line:
             info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': line_positions[player_id], 'state': 'EVEN'}
             lines_info.append(info)
+            assigned_forwards.add(player_id)
             print("{} ({}),".format(players[player_id]['name'], info['position']), end =" ")
         depth += 1
         print("")
@@ -416,10 +425,19 @@ def calculate_lines(toi_deployments, players, player_stats):
     pprint.pprint(sorted_defense_lines)
 
     depth = 1
-    for defense_line, toi in sorted_defense_lines[:3]:
+    assigned_defense = set()
+    for defense_line, toi in sorted_defense_lines:
+        if depth == 4:
+            break
+
+        # ensure that there is no intersection between these sets so we don't re-use players
+        if len(assigned_defense.intersection(defense_line)) is not 0:
+            continue
+
         for player_id in defense_line:
             info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': players[player_id]['position'], 'state':'EVEN'}
             lines_info.append(info)
+            assigned_defense.add(player_id)
             print("{},".format(players[player_id]['name']), end =" ")
         depth += 1
         print("")
