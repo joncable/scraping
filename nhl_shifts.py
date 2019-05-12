@@ -355,8 +355,9 @@ def determine_forward_positions(line, roster, player_stats):
         if player_id in forward_positions:
             continue
 
-        # assign remaining players a position
-        forward_positions[player_id] = available_positions.pop()
+        # assign remaining players a position (if left)
+        if len(available_positions) != 0:
+            forward_positions[player_id] = available_positions.pop()
 
     return forward_positions
 
