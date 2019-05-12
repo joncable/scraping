@@ -427,15 +427,16 @@ def calculate_lines(toi_deployments, players, player_stats):
         print("")
 
     # if we didn't have four separate lines
-    while depth < 5:
+    while depth > 1 and depth < 5:
         remaining_forwards = all_forwards.difference(assigned_forwards)
-        line_positions = determine_forward_positions(remaining_forwards, players, player_stats)
-        for player_id in remaining_forwards:
-            if player_id in line_positions:
-                info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': line_positions[player_id], 'state': 'EVEN'}
-                lines_info.append(info)
-                assigned_forwards.add(player_id)
-                print("{} ({}),".format(players[player_id]['name'], info['position']), end =" ")
+        if len(remaining_forwards) > 0:
+            line_positions = determine_forward_positions(remaining_forwards, players, player_stats)
+            for player_id in remaining_forwards:
+                if player_id in line_positions:
+                    info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': line_positions[player_id], 'state': 'EVEN'}
+                    lines_info.append(info)
+                    assigned_forwards.add(player_id)
+                    print("{} ({}),".format(players[player_id]['name'], info['position']), end =" ")
         depth += 1
         print("")
 
@@ -462,7 +463,7 @@ def calculate_lines(toi_deployments, players, player_stats):
         print("")
 
     # if we didn't have three separate lines
-    while depth < 5:
+    while depth > 1 and depth < 5:
         remaining_defense = all_defense.difference(assigned_defense)
         for player_id in remaining_defense:
             info = {'player_id': player_id, 'depth': depth, 'toi': toi, 'position': players[player_id]['position'], 'state':'EVEN'}
