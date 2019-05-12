@@ -476,6 +476,10 @@ def calculate_lines(toi_deployments, players, player_stats):
     return lines_info
 
 def write_lines_to_database(game_id, team_id, line_info):
+    # ensure we have new data
+    if not line_info:
+        return
+
     # set up postgres connection
     parse.uses_netloc.append("postgres")
     url = parse.urlparse(os.environ["DATABASE_URL"])
