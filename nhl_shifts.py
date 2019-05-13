@@ -69,6 +69,38 @@ def get_team_players_url(team_id):
     print('team_players url: ' + url)
     return url
 
+def get_records_team_players_url(team_id):
+    url = "https://records.nhl.com/site/api/player/byTeam/{}".format(team_id)
+    return url
+
+def get_records_team_players(team_id):
+    records_team_players_url = get_records_team_players_url(team_id)
+
+    # get the html
+    html = urlopen(records_team_players_url)
+    data = json.load(html)
+
+    roster = data['data']
+
+    team_players = {}
+
+    for player in roster:
+        player_id = player['id']
+        player_name = player['fullName']
+        position = player['position']
+
+        # jersey numbers aren't always set, default to zero
+        if 'sweaterNumber' in player:
+            player_number = player['sweaterNumber']
+        else:
+            player_number = 0
+
+        team_players[player_id] = {'name': player_name,
+                                   'number': player_number,
+                                   'position': position}
+
+    return team_players
+
 def get_team_players(team_id):
     team_players_url = get_team_players_url(team_id)
 
@@ -583,8 +615,8 @@ for game_id, teams in todays_games.items():
     home_id = teams['home']
     away_id = teams['away']
 
-    home_players = get_team_players(home_id)
-    away_players = get_team_players(away_id)
+    home_players = get_records_team_players(home_id)
+    away_players = get_records_team_players(away_id)
 
     player_stats = get_player_stats_for_game(game_id)
 
