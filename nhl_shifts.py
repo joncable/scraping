@@ -30,22 +30,6 @@ def get_season_from_gameid(game_id):
 
     return "{}{}".format(start_year, end_year)
 
-# The url we will be scraping
-# V stands for VISITOR and H stands for HOME
-# 02 stands for REGULAR SEASON
-# 01 stands for PRESEASON
-# 0265 is the game id and it increments
-def get_html_playbyplay_url(game_id):
-
-    # get start/end year for season and game number
-    season = get_season_from_gameid(game_id)
-    game_number = get_game_from_gameid(game_id)
-
-    # generate url based on season and game number
-    url = "http://www.nhl.com/scores/htmlreports/{}/PL{}.HTM".format(season, game_number)
-    print('playbyplay url: ' + url)
-    return url
-
 def get_home_html_timeonice_url(game_id):
 
     # get start/end year for season and game number
@@ -74,6 +58,10 @@ def get_schedule_url(date):
 
 def get_live_game_feed_url(game_id):
     url = "https://statsapi.web.nhl.com/api/v1/game/" + str(game_id) + "/feed/live?site=en_nhl"
+    return url
+
+def get_shift_charts_url(game_id):
+    url = "http://www.nhl.com/stats/rest/shiftcharts?cayenneExp=gameId=" + str(game_id)
     return url
 
 def get_team_players_url(team_id):
@@ -108,6 +96,43 @@ def get_team_players(team_id):
                                    'position': position}
 
     return team_players
+
+def parse_shift_charts(url):
+
+    # get the html
+    html = urlopen(url)
+    data = json.load(html)
+
+    shifts = {}
+
+    for shift in data['data']:
+        player_id = shift['playerId']
+        shift_start = shift['startTime']
+        shift_end = shift['endTime']
+        period = shift['period']
+        team_id = shift['teamId']
+
+        print("{} - {} for {}".format(shift_start, shift_end, player_id))
+
+        # get shift start/end minute:second, and split them
+        start_min, start_sec = shift_start.split(':')
+        end_min, end_sec = shift_end.split(':')
+
+        # convert each shift into a seconds timestamp
+        converted_shift = {}
+        converted_shift['start'] = (int(start_min) * 60) + int(start_sec) + ((int(period) - 1) * 20 * 60)
+        converted_shift['end'] = (int(end_min) * 60) + int(end_sec) + ((int(period) - 1) * 20 * 60)
+        converted_shift['player_id'] = player_id
+
+        # Add shift to list of team shifts
+        shifts.setdefault(team_id, []).append(converted_shift)
+
+    # sort by start of shift time
+    sorted_shifts = {}
+    for team_id in shifts:
+        sorted_shifts[team_id] = sorted(shifts[team_id], key=itemgetter('start'), reverse=True)
+
+    return sorted_shifts
 
 def get_player_stats_for_game(game_id):
     live_game_feed_url = get_live_game_feed_url(game_id)
@@ -159,35 +184,6 @@ def get_games_on_date(date):
             print("{} - {} @ {}".format(game_id, away_team, home_team))
 
     return todays_games
-
-
-
-def parse_playbyplay(url):
-    # get the html
-    html = urlopen(url)
-
-    # create the BeautifulSoup object
-    soup = BeautifulSoup(html, "lxml")
-
-    # Possible spaces in between last names like JAMES VAN RIEMSDYK
-    # Also allow for dashes in their name
-    p = re.compile("([A-z \-']+) - ([A-z\-']+) (['A-z \-']+)")
-
-    position_hash = {}
-
-    for row in soup.find_all("tr"): 
-        for cell in row.find_all("td"):
-            for font in cell.find_all("font"):
-                matches = p.match(font['title'])
-                if matches:
-                    number = str(cell.text).strip()
-                    position = matches.group(1)
-                    first_name = matches.group(2)
-                    last_name = matches.group(3)
-                    position_hash[number + ' ' + last_name + ', ' + first_name] = position
-
-    return position_hash
-
 
 def find_player_id(number, first_name, last_name, players):
 
@@ -584,7 +580,6 @@ for game_id, teams in todays_games.items():
     #    break
 
     print(game_id)
-    playbyplay_url = get_html_playbyplay_url(game_id)
     home_id = teams['home']
     away_id = teams['away']
 
@@ -593,8 +588,11 @@ for game_id, teams in todays_games.items():
 
     player_stats = get_player_stats_for_game(game_id)
 
-    home_toi_url = get_home_html_timeonice_url(game_id)
-    home_shifts = parse_time_on_ice(home_toi_url, home_players)
+    shift_charts_url = get_shift_charts_url(game_id)
+    shifts = parse_shift_charts(shift_charts_url)
+    home_shifts = shifts[home_id]
+    away_shifts = shifts[away_id]
+
     home_toi_deploy = calculate_toi_deployments(home_shifts)
     home_line_info = calculate_lines(home_toi_deploy, home_players, player_stats)
 
@@ -602,8 +600,6 @@ for game_id, teams in todays_games.items():
     if write_to_database:
         write_lines_to_database(game_id, home_id, home_line_info)
 
-    away_toi_url = get_away_html_timeonice_url(game_id)
-    away_shifts = parse_time_on_ice(away_toi_url, away_players)
     away_toi_deploy = calculate_toi_deployments(away_shifts)
     away_line_info = calculate_lines(away_toi_deploy, away_players, player_stats)
 
