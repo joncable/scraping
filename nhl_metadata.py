@@ -17,11 +17,13 @@ def get_nhl_teams_url():
     url = "https://statsapi.web.nhl.com/api/v1/teams"
     return url
 
-
 def get_nhl_team_players_url(team_id):
     url = "https://statsapi.web.nhl.com/api/v1/teams/{}?expand=team.roster".format(team_id)
     return url
 
+def get_records_nhl_team_players_url(team_id):
+    url = "https://records.nhl.com/site/api/player/byTeam/{}".format(team_id)
+    return url
 
 def get_nhl_teams():
     teams_url = get_nhl_teams_url()
@@ -123,6 +125,29 @@ def write_team_to_database(team_id, name, location, venue, team_name, division, 
 
     return
 
+def get_records_team_players(team_id):
+    players_url = get_records_nhl_team_players_url(team_id)
+
+    # get the html
+    html = urlopen(players_url)
+    data = json.load(html)
+
+    roster = data['data']
+
+    for player in roster:
+        player_id = player['id']
+        player_name = player['fullName']
+        position = player['position']
+        handedness = player['shootsCatches']
+
+        # jersey numbers aren't always set, default to zero
+        if 'sweaterNumber' in player:
+            player_number = player['sweaterNumber']
+        else:
+            player_number = 0
+
+        write_player_to_database(player_id, team_id, player_name, position, player_number)
+
 def get_team_players(team_id):
     players_url = get_nhl_team_players_url(team_id)
 
@@ -157,6 +182,6 @@ for team in teams:
 
     # write_team_to_database(team_id, name, location, venue, team_name, division, conference)
 
-    players = get_team_players(team_id)
+    players = get_records_team_players(team_id)
 
 
