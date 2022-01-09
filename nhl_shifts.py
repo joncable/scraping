@@ -73,7 +73,7 @@ def get_live_game_feed_url(game_id):
 
 
 def get_shift_charts_url(game_id):
-    url = "http://www.nhl.com/stats/rest/shiftcharts?cayenneExp=gameId=" + str(game_id)
+    url = "https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId=" + str(game_id)
     return url
 
 
@@ -709,6 +709,11 @@ for game_id, teams in todays_games.items():
 
     shift_charts_url = get_shift_charts_url(game_id)
     shifts = parse_shift_charts(shift_charts_url)
+
+    if not shifts:
+        # some games don't have shifts in the response
+        continue
+        
     home_shifts = shifts[home_id]
     away_shifts = shifts[away_id]
 
